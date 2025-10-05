@@ -1,6 +1,16 @@
 #!/bin/bash
+# ========================================================================
+# 🪣 MinIO Direct Sync Script
+# ------------------------------------------------------------------------
+# Syncs new files between two MinIO aliases or paths using the `mc` client.
+# Example:
+#   ./sync.sh production-storage/general-storage backup-storage/general-storage
+#
+# Author: Meghdad Fadaee
+# Version: 1.1 (2025-10-05)
+# ========================================================================
 
-# Check if both source and destination are provided
+# --- Input Validation ---------------------------------------------------
 if [ $# -ne 2 ]; then
   echo "❌ Usage: $0 <source-alias/path> <dest-alias/path>"
   echo "   Example: $0 production-storage/general-storage backup-storage/general-storage"
@@ -10,50 +20,73 @@ fi
 SOURCE="$1"
 DEST="$2"
 
+# --- Setup --------------------------------------------------------------
 TODAY=$(date +%Y-%m-%d)
-TMP_DIR="./logs/$TODAY/temp"
-LOG_FILE="./logs/$TODAY/sync.log"
+LOG_DIR="./logs/$TODAY"
+TMP_DIR="$LOG_DIR/tmp"
+LOG_FILE="$LOG_DIR/sync.log"
 
 mkdir -p "$TMP_DIR"
 mkdir -p "$(dirname "$LOG_FILE")"
 
-echo "🧾 logging in: $LOG_FILE"
-echo "🔄 $(date '+%F %T') - Starting sync from $SOURCE to $DEST" >> "$LOG_FILE"
+# --- Helper for logs ----------------------------------------------------
+log() {
+    local LEVEL="$1"
+    local MSG="$2"
+    local TIME=$(date '+%F %T')
+    echo "[$TIME] [$LEVEL] $MSG" | tee -a "$LOG_FILE"
+}
 
+# --- Start --------------------------------------------------------------
+log "INFO" "Starting sync process..."
+log "INFO" "Source: $SOURCE"
+log "INFO" "Destination: $DEST"
+log "INFO" "Log file: $LOG_FILE"
 
-# List existing files in source
-echo "📁 $(date '+%F %T') - Listing source files..." >> "$LOG_FILE"
-mc ls --recursive "$SOURCE" | awk '{print $NF}' | sort > "$TMP_DIR/source_files.txt"
+# --- Step 1: List Source Files ------------------------------------------
+log "INFO" "Listing files in source..."
+if ! mc ls --recursive "$SOURCE" | awk '{print $NF}' | sort > "$TMP_DIR/source_files.txt"; then
+    log "ERROR" "Failed to list files from source: $SOURCE"
+    exit 1
+fi
 SOURCE_COUNT=$(wc -l < "$TMP_DIR/source_files.txt")
-echo "📦 $(date '+%F %T') - Found $SOURCE_COUNT files in source ($SOURCE)" >> "$LOG_FILE"
+log "INFO" "Found $SOURCE_COUNT file(s) in source."
 
-# List existing files in destination
-echo "📁 $(date '+%F %T') - Listing destination files..." >> "$LOG_FILE"
-mc ls --recursive "$DEST" | awk '{print $NF}' | sort > "$TMP_DIR/dest_files.txt"
+# --- Step 2: List Destination Files -------------------------------------
+log "INFO" "Listing files in destination..."
+if ! mc ls --recursive "$DEST" | awk '{print $NF}' | sort > "$TMP_DIR/dest_files.txt"; then
+    log "ERROR" "Failed to list files from destination: $DEST"
+    exit 1
+fi
 DEST_COUNT=$(wc -l < "$TMP_DIR/dest_files.txt")
-echo "📦 $(date '+%F %T') - Found $DEST_COUNT files in destination ($DEST)" >> "$LOG_FILE"
+log "INFO" "Found $DEST_COUNT file(s) in destination."
 
-# Compare or sync logic would go here...
-echo "⚙️ $(date '+%F %T') - Ready to compare and sync..." >> "$LOG_FILE"
-
-# Compare to find new files
+# --- Step 3: Compare Lists ----------------------------------------------
+log "INFO" "Comparing file lists to find new files..."
 comm -23 "$TMP_DIR/source_files.txt" "$TMP_DIR/dest_files.txt" > "$TMP_DIR/files_to_copy.txt"
-
 TOTAL=$(wc -l < "$TMP_DIR/files_to_copy.txt")
-COUNT=0
 
 if [ "$TOTAL" -eq 0 ]; then
-    echo "✅ No new files to sync." | tee -a "$LOG_FILE"
+    log "SUCCESS" "✅ No new files to sync. Everything is up to date."
     exit 0
 fi
 
-echo "🔢 Found $TOTAL new file(s) to sync." | tee -a "$LOG_FILE"
+log "INFO" "🔢 Found $TOTAL new file(s) to sync."
 
-# Loop to copy files with progress display
-while read -r file; do
+# --- Step 4: Sync Files -------------------------------------------------
+COUNT=0
+while read -r FILE; do
+    [ -z "$FILE" ] && continue
     COUNT=$((COUNT + 1))
-    echo -ne "📤 [$COUNT/$TOTAL] Copying: $file\r"
-    mc cp "$SOURCE/$file" "$DEST/$file" >> "$LOG_FILE" 2>&1
+    PROGRESS="[$COUNT/$TOTAL]"
+    log "INFO" "$PROGRESS Copying: $FILE"
+
+    if mc cp "$SOURCE/$FILE" "$DEST/$FILE" >> "$LOG_FILE" 2>&1; then
+        log "SUCCESS" "$PROGRESS Successfully copied: $FILE"
+    else
+        log "ERROR" "$PROGRESS Failed to copy: $FILE"
+    fi
 done < "$TMP_DIR/files_to_copy.txt"
 
-echo -e "\n✅ Sync complete at $(date '+%F %T')" | tee -a "$LOG_FILE"
+# --- Done ---------------------------------------------------------------
+log "SUCCESS" "✅ Sync completed successfully at $(date '+%F %T')"

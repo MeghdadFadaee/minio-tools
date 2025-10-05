@@ -47,9 +47,9 @@ mc ls backup-storage
 Clone the repository and make the script executable:
 
 ```bash
-git clone https://github.com/<your-username>/minio-backup-sync.git
-cd minio-backup-sync
-chmod +x sync.sh
+git clone https://github.com/MeghdadFadaee/minio-tools.git
+cd minio-tools/sync-two-connection
+chmod +x script.sh
 ```
 
 Optionally, create a `logs` folder (auto-created if missing):
@@ -63,12 +63,12 @@ mkdir -p logs
 
 Basic syntax:
 ```bash
-./sync.sh <source-alias/path> <dest-alias/path>
+./script.sh <source-alias/path> <dest-alias/path>
 ```
 
 Example:
 ```bash
-./sync.sh production-storage/general-storage backup-storage/general-storage
+./script.sh production-storage/general-storage backup-storage/general-storage
 ```
 
 ---
@@ -120,7 +120,7 @@ tail -f logs/$(date +%Y-%m-%d)/sync.log
 ## 🧹 Optional Tips
 - Automate with `cron`:
   ```bash
-  0 3 * * * /path/to/sync.sh production-storage/general-storage backup-storage/general-storage >> /path/to/logs/cron.log 2>&1
+  0 3 * * * /path/to/script.sh production-storage/general-storage backup-storage/general-storage >> /path/to/logs/cron.log 2>&1
   ```
 - View previous day’s sync:
   ```bash
@@ -131,7 +131,7 @@ tail -f logs/$(date +%Y-%m-%d)/sync.log
 
 ## 🧑‍💻 Author
 **Meghdad Fadaee**  
-📂 GitHub: [@your-username](https://github.com/your-username)
+📂 GitHub: [@MeghdadFadaee](https://github.com/MeghdadFadaee)
 
 ---
 
